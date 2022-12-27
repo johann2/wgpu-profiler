@@ -76,6 +76,7 @@ On [`GpuProfiler::end_frame`], we memorize the total size of all `QueryPool`s in
 */
 
 use std::{convert::TryInto, ops::Range};
+use wgpu::QUERY_RESOLVE_BUFFER_ALIGNMENT;
 
 pub mod chrometrace;
 pub mod macros;
@@ -216,7 +217,7 @@ impl GpuProfiler {
                 &query_pool.query_set,
                 query_pool.num_resolved_queries..query_pool.num_used_queries,
                 &query_pool.buffer,
-                (query_pool.num_resolved_queries * QUERY_SIZE) as u64,
+                query_pool.num_resolved_queries  as u64 * QUERY_RESOLVE_BUFFER_ALIGNMENT,
             );
             query_pool.num_resolved_queries = query_pool.num_used_queries;
         }
@@ -387,7 +388,7 @@ impl GpuProfiler {
 
                 // By design timestamps for start/end are consecutive.
                 let buffer = &resolved_query_buffers[scope.start_query.pool_idx as usize];
-                let offset = (scope.start_query.query_idx * QUERY_SIZE) as usize;
+                let offset = scope.start_query.query_idx  as usize* QUERY_RESOLVE_BUFFER_ALIGNMENT as usize;
                 let start_raw = u64::from_le_bytes(buffer[offset..(offset + std::mem::size_of::<u64>())].try_into().unwrap());
                 let end_raw = u64::from_le_bytes(
                     buffer[(offset + std::mem::size_of::<u64>())..(offset + std::mem::size_of::<u64>() * 2)]
@@ -442,7 +443,7 @@ impl QueryPool {
 
             buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("GpuProfiler - Query Buffer"),
-                size: (QUERY_SIZE * capacity) as u64,
+                size: QUERY_RESOLVE_BUFFER_ALIGNMENT * capacity as u64,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
@@ -460,7 +461,7 @@ impl QueryPool {
     }
 
     fn resolved_buffer_slice(&self) -> wgpu::BufferSlice {
-        self.buffer.slice(0..(self.num_resolved_queries * QUERY_SIZE) as u64)
+        self.buffer.slice(0..self.num_resolved_queries as u64*QUERY_RESOLVE_BUFFER_ALIGNMENT)
     }
 }
 
